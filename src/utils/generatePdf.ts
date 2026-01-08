@@ -9,14 +9,16 @@ interface Calculations {
   cgst: number;
   sgst: number;
   igst: number;
+  gstRate: number;
 }
 
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
+const formatCurrencyForPDF = (amount: number) => {
+  // Simple formatting for PDF to avoid special character issues
+  const formatted = amount.toLocaleString('en-IN', {
     minimumFractionDigits: 2,
-  }).format(amount);
+    maximumFractionDigits: 2,
+  });
+  return `Rs. ${formatted}`;
 };
 
 const formatDate = (dateString: string) => {
@@ -30,91 +32,198 @@ const formatDate = (dateString: string) => {
 export const generateInvoicePdf = (invoice: InvoiceData, calculations: Calculations) => {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  
+  // Define consistent margins and spacing
+  const leftMargin = 20;
+  const rightMargin = 20;
+  const lineHeight = 7;
+  
+  let currentY = 20;
 
-  // Header
-  doc.setFontSize(20);
+  // Header Section
+  // Business Name - Bold, Large, Centered
+  doc.setFontSize(22);
   doc.setFont('helvetica', 'bold');
-  doc.text(invoice.businessName, pageWidth / 2, 25, { align: 'center' });
-
+  doc.text(invoice.businessName, pageWidth / 2, currentY, { align: 'center' });
+  
+  currentY += 8;
+  
+  // Branch and Address
   doc.setFontSize(12);
   doc.setFont('helvetica', 'normal');
-  doc.text('TAX INVOICE', pageWidth / 2, 33, { align: 'center' });
-
-  // Line separator
-  doc.setLineWidth(0.5);
-  doc.line(14, 38, pageWidth - 14, 38);
-
-  // Invoice details
+  doc.text(invoice.businessDetails.branch, pageWidth / 2, currentY, { align: 'center' });
+  
+  currentY += 6;
+  
   doc.setFontSize(10);
-  doc.text(`Invoice No: ${invoice.invoiceNumber}`, 14, 48);
-  doc.text(`Date: ${formatDate(invoice.invoiceDate)}`, pageWidth - 14, 48, { align: 'right' });
-  doc.text(`Payment Mode: ${invoice.paymentMode}`, 14, 55);
-  doc.text(`Tax Type: ${invoice.taxType === 'cgst_sgst' ? 'CGST + SGST' : 'IGST'}`, pageWidth - 14, 55, { align: 'right' });
+  doc.text(invoice.businessDetails.address, pageWidth / 2, currentY, { align: 'center' });
+  
+  currentY += 5;
+  
+  // Contact and GSTIN
+  doc.text(`Ph: ${invoice.businessDetails.contactNumber} | GSTIN: ${invoice.businessDetails.gstin}`, pageWidth / 2, currentY, { align: 'center' });
+  
+  currentY += 8;
+  
+  // TAX INVOICE - Centered
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.text('TAX INVOICE', pageWidth / 2, currentY, { align: 'center' });
+  
+  currentY += 5;
+  
+  // Shop Type and GST Rate
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`${invoice.shopType.name} • GST: ${(invoice.shopType.gstRate * 100).toFixed(0)}%`, pageWidth / 2, currentY, { align: 'center' });
+  
+  currentY += 8;
+  
+  // Horizontal separator line
+  doc.setLineWidth(0.8);
+  doc.line(leftMargin, currentY, pageWidth - rightMargin, currentY);
+  
+  currentY += 12;
 
-  // Items table
+  // Invoice Details Section
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'normal');
+  
+  // Left side details
+  const leftDetailsY = currentY;
+  doc.text(`Invoice No: ${invoice.invoiceNumber}`, leftMargin, leftDetailsY);
+  doc.text(`Payment Mode: ${invoice.paymentMode}`, leftMargin, leftDetailsY + lineHeight);
+  doc.text(`Cashier: ${invoice.businessDetails.cashierName}`, leftMargin, leftDetailsY + (lineHeight * 2));
+  
+  // Right side details
+  const rightDetailsX = pageWidth - rightMargin;
+  doc.text(`Date: ${formatDate(invoice.invoiceDate)}`, rightDetailsX, leftDetailsY, { align: 'right' });
+  doc.text(`Tax Type: ${invoice.taxType === 'cgst_sgst' ? 'CGST + SGST' : 'IGST'}`, rightDetailsX, leftDetailsY + lineHeight, { align: 'right' });
+  if (invoice.businessDetails.counterNumber) {
+    doc.text(`Counter: ${invoice.businessDetails.counterNumber}`, rightDetailsX, leftDetailsY + (lineHeight * 2), { align: 'right' });
+  }
+  
+  currentY = leftDetailsY + (lineHeight * 3) + 8;
+
+  // Items Table using autoTable
   const tableData = invoice.items.map((item, index) => [
-    index + 1,
+    (index + 1).toString(),
     item.productName,
-    item.quantity,
-    formatCurrency(item.pricePerUnit),
-    formatCurrency(item.lineTotal),
+    item.quantity.toString(),
+    formatCurrencyForPDF(item.pricePerUnit),
+    formatCurrencyForPDF(item.lineTotal),
   ]);
 
   autoTable(doc, {
-    startY: 65,
-    head: [['#', 'Product', 'Qty', 'Price', 'Total']],
+    startY: currentY,
+    head: [['S.No', 'Product Description', 'Qty', 'Rate', 'Amount']],
     body: tableData,
-    theme: 'striped',
+    margin: { left: leftMargin, right: rightMargin },
+    tableWidth: 'auto',
+    theme: 'grid',
     headStyles: {
-      fillColor: [59, 130, 246],
+      fillColor: [41, 128, 185],
       textColor: 255,
       fontStyle: 'bold',
+      fontSize: 11,
+      halign: 'center',
+      valign: 'middle',
+    },
+    bodyStyles: {
+      fontSize: 10,
+      valign: 'middle',
     },
     columnStyles: {
-      0: { cellWidth: 15, halign: 'center' },
-      1: { cellWidth: 'auto' },
-      2: { cellWidth: 25, halign: 'right' },
-      3: { cellWidth: 35, halign: 'right' },
-      4: { cellWidth: 35, halign: 'right' },
+      0: { 
+        cellWidth: 18, 
+        halign: 'center',
+        fontStyle: 'normal'
+      },
+      1: { 
+        cellWidth: 70, 
+        halign: 'left',
+        cellPadding: { left: 3, right: 3, top: 3, bottom: 3 }
+      },
+      2: { 
+        cellWidth: 20, 
+        halign: 'center',
+        fontStyle: 'normal'
+      },
+      3: { 
+        cellWidth: 30, 
+        halign: 'right',
+        fontStyle: 'normal'
+      },
+      4: { 
+        cellWidth: 32, 
+        halign: 'right',
+        fontStyle: 'bold'
+      },
+    },
+    styles: {
+      overflow: 'linebreak',
+      cellPadding: 2,
+      lineColor: [100, 100, 100],
+      lineWidth: 0.2,
+      fontSize: 10,
+    },
+    alternateRowStyles: {
+      fillColor: [248, 249, 250],
     },
   });
 
   // Get the final Y position after the table
-  const finalY = (doc as any).lastAutoTable.finalY + 10;
+  const tableEndY = (doc as any).lastAutoTable.finalY;
+  currentY = tableEndY + 10;
 
-  // Totals section
-  const totalsX = pageWidth - 70;
-  let currentY = finalY;
-
-  doc.setFontSize(10);
-  doc.text('Subtotal:', totalsX, currentY);
-  doc.text(formatCurrency(calculations.subtotal), pageWidth - 14, currentY, { align: 'right' });
-
-  currentY += 7;
+  // Totals Section - Right aligned block, positioned at right margin
+  const totalsBlockWidth = 80;
+  const totalsStartX = pageWidth - rightMargin - totalsBlockWidth;
+  const valueX = pageWidth - rightMargin - 5;
+  
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'normal');
+  
+  // Subtotal
+  doc.text('Subtotal:', totalsStartX, currentY);
+  doc.text(formatCurrencyForPDF(calculations.subtotal), valueX, currentY, { align: 'right' });
+  currentY += lineHeight;
+  
+  // Tax details
+  const gstHalfRate = (calculations.gstRate * 50).toFixed(1);
+  const gstFullRate = (calculations.gstRate * 100).toFixed(0);
+  
   if (invoice.taxType === 'cgst_sgst') {
-    doc.text('CGST (9%):', totalsX, currentY);
-    doc.text(formatCurrency(calculations.cgst), pageWidth - 14, currentY, { align: 'right' });
-    currentY += 7;
-    doc.text('SGST (9%):', totalsX, currentY);
-    doc.text(formatCurrency(calculations.sgst), pageWidth - 14, currentY, { align: 'right' });
+    doc.text(`CGST (${gstHalfRate}%):`, totalsStartX, currentY);
+    doc.text(formatCurrencyForPDF(calculations.cgst), valueX, currentY, { align: 'right' });
+    currentY += lineHeight;
+    
+    doc.text(`SGST (${gstHalfRate}%):`, totalsStartX, currentY);
+    doc.text(formatCurrencyForPDF(calculations.sgst), valueX, currentY, { align: 'right' });
+    currentY += lineHeight;
   } else {
-    doc.text('IGST (18%):', totalsX, currentY);
-    doc.text(formatCurrency(calculations.igst), pageWidth - 14, currentY, { align: 'right' });
+    doc.text(`IGST (${gstFullRate}%):`, totalsStartX, currentY);
+    doc.text(formatCurrencyForPDF(calculations.igst), valueX, currentY, { align: 'right' });
+    currentY += lineHeight;
   }
-
+  
+  // Divider line for totals
+  currentY += 4;
+  doc.setLineWidth(0.8);
+  doc.line(totalsStartX, currentY, valueX, currentY);
   currentY += 10;
-  doc.setLineWidth(0.3);
-  doc.line(totalsX - 5, currentY - 3, pageWidth - 14, currentY - 3);
-
-  doc.setFontSize(12);
+  
+  // Grand Total - Bold and larger
+  doc.setFontSize(13);
   doc.setFont('helvetica', 'bold');
-  doc.text('Grand Total:', totalsX, currentY + 2);
-  doc.text(formatCurrency(calculations.grandTotal), pageWidth - 14, currentY + 2, { align: 'right' });
+  doc.text('Grand Total:', totalsStartX, currentY);
+  doc.text(formatCurrencyForPDF(calculations.grandTotal), valueX, currentY, { align: 'right' });
 
   // Footer
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'normal');
-  doc.text('Thank you for your business!', pageWidth / 2, doc.internal.pageSize.getHeight() - 15, { align: 'center' });
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'italic');
+  doc.text('Thank you for your business!', pageWidth / 2, pageHeight - 20, { align: 'center' });
 
   // Save PDF
   doc.save(`${invoice.invoiceNumber}.pdf`);

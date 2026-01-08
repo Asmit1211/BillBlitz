@@ -20,6 +20,7 @@ interface InvoicePreviewProps {
     cgst: number;
     sgst: number;
     igst: number;
+    gstRate: number;
   };
   onRemoveItem: (id: string) => void;
 }
@@ -48,9 +49,20 @@ export const InvoicePreview = ({
   return (
     <div className="bg-white rounded-lg border shadow-sm p-6 space-y-6">
       {/* Header */}
-      <div className="text-center border-b pb-4">
+      <div className="text-center border-b pb-4 space-y-2">
         <h2 className="text-2xl font-bold text-gray-900">{invoice.businessName}</h2>
-        <p className="text-sm text-gray-500 mt-1">TAX INVOICE</p>
+        <div className="text-sm text-gray-600 space-y-1">
+          <p className="font-medium">{invoice.businessDetails.branch}</p>
+          <p>{invoice.businessDetails.address}</p>
+          <div className="flex justify-center gap-4 text-xs">
+            <span>Ph: {invoice.businessDetails.contactNumber}</span>
+            <span>GSTIN: {invoice.businessDetails.gstin}</span>
+          </div>
+        </div>
+        <p className="text-sm text-gray-500 mt-2">TAX INVOICE</p>
+        <p className="text-xs text-gray-400">
+          {invoice.shopType.name} • GST: {(invoice.shopType.gstRate * 100).toFixed(0)}%
+        </p>
       </div>
 
       {/* Invoice Details */}
@@ -72,6 +84,14 @@ export const InvoicePreview = ({
           <p className="font-medium">
             {invoice.taxType === 'cgst_sgst' ? 'CGST + SGST' : 'IGST'}
           </p>
+        </div>
+        <div>
+          <p className="text-gray-500">Cashier</p>
+          <p className="font-medium">{invoice.businessDetails.cashierName}</p>
+        </div>
+        <div className="text-right">
+          <p className="text-gray-500">Counter</p>
+          <p className="font-medium">{invoice.businessDetails.counterNumber || 'N/A'}</p>
         </div>
       </div>
 
@@ -134,17 +154,17 @@ export const InvoicePreview = ({
             {invoice.taxType === 'cgst_sgst' ? (
               <>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">CGST (9%)</span>
+                  <span className="text-gray-500">CGST ({(calculations.gstRate * 50).toFixed(1)}%)</span>
                   <span>{formatCurrency(calculations.cgst)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">SGST (9%)</span>
+                  <span className="text-gray-500">SGST ({(calculations.gstRate * 50).toFixed(1)}%)</span>
                   <span>{formatCurrency(calculations.sgst)}</span>
                 </div>
               </>
             ) : (
               <div className="flex justify-between">
-                <span className="text-gray-500">IGST (18%)</span>
+                <span className="text-gray-500">IGST ({(calculations.gstRate * 100).toFixed(0)}%)</span>
                 <span>{formatCurrency(calculations.igst)}</span>
               </div>
             )}
