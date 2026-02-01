@@ -223,7 +223,7 @@ export const generateInvoicePdf = (invoice: InvoiceData, calculations: Calculati
   // Footer
   doc.setFontSize(9);
   doc.setFont('helvetica', 'italic');
-  doc.text('Thank you for your business!', pageWidth / 2, pageHeight - 20, { align: 'center' });
+  doc.text('We appreciate your business. Hope to see you again!', pageWidth / 2, pageHeight - 20, { align: 'center' });
 
   // Save PDF
   doc.save(`${invoice.invoiceNumber}.pdf`);
